@@ -1,0 +1,159 @@
+Option Explicit
+
+Sub Save_attachments()
+
+
+    Dim ol As Outlook.Application   'Declaration of Variables
+    Dim ns As Outlook.Namespace
+    Dim fol As Outlook.Folder
+    Dim i As Object
+    Dim j As Long
+    Dim mi As Outlook.MailItem
+    Dim at As Outlook.Attachment
+
+    Dim FileToOpen As Variant
+    Dim OpenBook As Workbook
+    Dim src As Workbook
+    Dim dest As Workbook
+    Dim file_name As String
+    Dim email As String
+    Dim LastRow As Long
+    Dim nrows As Long
+   
+    Dim rng As Range
+   
+    Set rng = ActiveCell
+
+    Set ol = New Outlook.Application            'Initialize Outlook
+    Set ns = ol.GetNamespace("MAPI")            'Set NameSpace Object
+    Set fol = ns.Folders(1).Folders("Inbox")    'Set variable fol as InboxFolder
+
+    Application.DisplayAlerts = False           'Don't show alerts
+
+    'MsgBox ns.Folders(1).Folders("Inbox")
+
+    Application.ScreenUpdating = False          'Don't Update Screen
+
+    Set dest = ThisWorkbook
+
+    dest.ActiveSheet.Range("A1").Select
+
+    dest.ActiveSheet.Range("A1").Value = "E-mail"           'Set the Header Column
+    dest.ActiveSheet.Range("B1").Value = "Status"
+    dest.ActiveSheet.Range("C1").Value = "Last Update"
+
+    LastRow = ThisWorkbook.ActiveSheet.Cells(rows.Count, 1).End(xlUp).Row  'Calculate the Last Row Used
+
+    For Each i In fol.Items                         'Looping through all emails in Inbox Folder
+
+        If i.Class = olMail Then                    'Check if the type of email is of outlook mail type
+           
+            Set mi = i                              'Set mi variable as mail item type
+           
+            'Debug.Print mi.SenderName, mi.ReceivedTime
+
+            If mi.Attachments.Count > 0 Then  'Consider only e-mails with attachments
+
+                If mi.SenderEmailType = "EX" Then                       'Set email variable according to the type of email
+                    email = mi.Sender.GetExchangeUser().PrimarySmtpAddress
+                ElseIf mi.SenderEmailType = "SMTP" Then
+                    email = mi.SenderEmailAddress
+                End If
+
+                If (email = "email id 1" And mi.UnRead = True) Or (email = "email id 2" And mi.UnRead = True) Then 'Hard Code the required
+                                                                                                                                            'e-mail addresses
+
+                    'Debug.Print mi.ReceivedDate
+                    'Debug.Print mi.ReceivedTime, mi.Attachments.Count
+
+
+                    For Each at In mi.Attachments       'Loop through the attachments
+
+                        'Debug.Print at.DisplayName, at.Size
+                        at.SaveAsFile "location name" & at.Filename  'Save attachment at location
+                        file_name = "location name" & at.Filename    'Set file_name variable as the attachment address
+                        Set src = Workbooks.Open(Filename:=file_name, IgnoreReadOnlyRecommended:=True)  'Set src variable and open the workbook
+
+                            dest.Activate
+                           
+                            For j = 2 To rows.Count                     'Loop row-wise through the file where the macro is run
+                                If Cells(j, 1).Value = email Then       'Check if the email value is present in the row, Next line is to find the cell with the email
+                                    Cells.Find(What:=email, _
+                                                After:=Range("A1"), _
+                                                SearchOrder:=xlByRows, _
+                                                SearchDirection:=xlPrevious, _
+                                                MatchCase:=False).Select
+                                    Application.CutCopyMode = False
+                                    ActiveCell.Offset(1, 0).EntireRow.Insert        'Insert 2 rows
+                                    ActiveCell.Offset(1, 0).EntireRow.Insert
+                                    Application.CutCopyMode = True
+                                    src.ActiveSheet.Range("A2:B3").Copy             'Copy the required range from the source fuile
+                                    ActiveCell.Offset(1, 0).Select
+                                    dest.ActiveSheet.Paste                          'Paste in the destination file
+                                    Cells(j + 2, 3).Value = mi.ReceivedTime         'Print the email received time in the corresponding column
+                                    Cells(j + 3, 3).Value = mi.ReceivedTime
+                                   
+                                    Exit For
+                                   
+                                ElseIf Cells(j, 1).Value <> email Then              'If value is not equal to email
+                                    LastRow = ThisWorkbook.ActiveSheet.Cells(rows.Count, 1).End(xlUp).Row  'Update Last Row Value
+                                    If IsEmpty(Cells(2, 1).Value) = True Then       'If there workbook is empty except header
+                                        dest.ActiveSheet.Cells(LastRow + 1, 1).Select
+                                        src.ActiveSheet.Range("A2:B3").Copy
+                                        dest.ActiveSheet.Paste
+                                        Cells(LastRow + 1, 3).Value = mi.ReceivedTime
+                                        Cells(LastRow + 2, 3).Value = mi.ReceivedTime
+                                    Else                                            'If workbook has entries, update last row in next line
+                                        LastRow = ThisWorkbook.ActiveSheet.Cells(rows.Count, 1).End(xlUp).Row
+                                        Cells(LastRow, 1).Select
+                                        'dest.ActiveSheet.Cells(LastRow + 1, 1).Select
+                                        If ActiveCell.Value = email Then             'If active cell has email, append in the same block
+                                            ActiveCell.Offset(1, 0).Select
+                                            src.ActiveSheet.Range("A2:B3").Copy
+                                            dest.ActiveSheet.Paste
+                                            Cells(LastRow + 1, 3).Value = mi.ReceivedTime
+                                            Cells(LastRow + 2, 3).Value = mi.ReceivedTime
+                                        Else                                         'If active cell doesn't have email, append after offsetting
+                                            ActiveCell.Offset(2, 0).Select
+                                            src.ActiveSheet.Range("A2:B3").Copy
+                                            dest.ActiveSheet.Paste
+                                            Cells(LastRow + 2, 3).Value = mi.ReceivedTime
+                                            Cells(LastRow + 3, 3).Value = mi.ReceivedTime
+                                        End If
+                                       
+                                    End If
+                                 Exit For
+                                End If
+                            Next j
+                           
+                         src.Close
+
+                    Next at
+
+                End If
+
+            End If
+
+        End If
+
+    Next i
+
+    'src.Close False             ' FALSE - DON'T SAVE THE SOURCE FILE.
+    Set src = Nothing
+
+    'FileToOpen = Application.GetOpenFilename(FileFilter:="Excel Files (*.xls*),*xls*,Excel Workbook (*.xlsx*),*xlsx, Excel Macro-Enabled Workbook (*.xlsm*),*.xlsm*, Excel Binary Workbook (*.xlsb*),*.xlsb*", MultiSelect:=True)
+
+'        If FileToOpen <> False Then
+'
+'            Set OpenBook = Application.Workbooks.Open(FileToOpen)
+'            OpenBook.Sheets(1).UsedRange.Copy
+'            ThisWorkbook.ActiveSheet.Range("A1").Paste
+'            OpenBook.Close False
+'
+'        End If
+
+        Application.ScreenUpdating = True
+
+        Application.DisplayAlerts = True
+
+End Sub
